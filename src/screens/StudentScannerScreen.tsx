@@ -4,6 +4,8 @@ import { Camera, CameraView } from 'expo-camera';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DEFAULT_SERVER_URL } from '../config';
+import * as ImagePicker from 'expo-image-picker';
+import { BarCodeScanner } from 'expo-barcode-scanner';
 
 export default function StudentScannerScreen({ navigation }: any) {
     const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -31,63 +33,99 @@ export default function StudentScannerScreen({ navigation }: any) {
         setScanned(true);
 
         try {
-            // Validate it's an attendance QR code
-            // Format is usually: https://attendance-server.../s/{sessionCode}
-            const match = data.match(/\/s\/([a-zA-Z0-9_-]+)/);
-            if (!match) {
-                setMessage('Invalid QR code scanned. Try again.');
-                setTimeout(() => setScanned(false), 3000);
-                return;
-            }
-
-            const sessionCode = match[1];
-            setMessage('📍 Getting Location...');
-
-            // Geolocation Fetch
-            let location;
-            try {
-                location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-            } catch (err) {
-                setMessage('Failed to get Location. Retrying...');
-                location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            }
-
-            setMessage('⏳ Submitting Attendance...');
-
-            // Submit to specific React Native mobile API
-            const res = await fetch(`${DEFAULT_SERVER_URL}/api/student/submit`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: studentInfo.email,
-                    deviceId: studentInfo.deviceId,
-                    sessionCode: sessionCode,
-                    lat: location.coords.latitude,
-                    lon: location.coords.longitude
-                })
-            });
-
-            const responseText = await res.text();
-            let resultData;
-            try { resultData = JSON.parse(responseText); } catch (e) { throw new Error('Crashed: ' + responseText); }
-
-
-            if (resultData.success) {
-                Alert.alert('✅ Attendance Recorded!', 'You are marked present for this session.', [
-                    { text: 'OK', onPress: () => setScanned(false) }
-                ]);
-                setMessage('Success! Ready to scan again.');
-            } else {
-                Alert.alert('Attendance Failed', resultData.error || 'Unknown error occurred.', [
-                    { text: 'Try Again', onPress: () => setScanned(false) }
-                ]);
-                setMessage('Failed. Try scanning again.');
-            }
-
+            await processQRData(data);
         } catch (error: any) {
             Alert.alert('Network Error', error.message || 'Failed to submit attendance.');
             setScanned(false);
             setMessage('Network error. Try scanning again.');
+        }
+    };
+
+    const processQRData = async (data: string) => {
+        if (!studentInfo) return;
+
+        // Validate it's an attendance QR code
+        // Format is usually: https://attendance-server.../s/{sessionCode}
+        const match = data.match(/\/s\/([a-zA-Z0-9_-]+)/);
+        if (!match) {
+            setMessage('Invalid QR code scanned. Try again.');
+            setTimeout(() => setScanned(false), 3000);
+            return;
+        }
+
+        const sessionCode = match[1];
+        setMessage('📍 Getting Location...');
+
+        // Geolocation Fetch
+        let location;
+        try {
+            location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        } catch (err) {
+            setMessage('Failed to get Location. Retrying...');
+            location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        }
+
+        setMessage('⏳ Submitting Attendance...');
+
+        // Submit to specific React Native mobile API
+        const res = await fetch(`${DEFAULT_SERVER_URL}/api/student/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: studentInfo.email,
+                deviceId: studentInfo.deviceId,
+                sessionCode: sessionCode,
+                lat: location.coords.latitude,
+                lon: location.coords.longitude
+            })
+        });
+
+        const responseText = await res.text();
+        let resultData;
+        try { resultData = JSON.parse(responseText); } catch (e) { throw new Error('Crashed: ' + responseText); }
+
+
+        if (resultData.success) {
+            Alert.alert('✅ Attendance Recorded!', 'You are marked present for this session.', [
+                { text: 'OK', onPress: () => setScanned(false) }
+            ]);
+            setMessage('Success! Ready to scan again.');
+        } else {
+            Alert.alert('Attendance Failed', resultData.error || 'Unknown error occurred.', [
+                { text: 'Try Again', onPress: () => setScanned(false) }
+            ]);
+            setMessage('Failed. Try scanning again.');
+        }
+    };
+
+    const uploadFromGallery = async () => {
+        if (scanned || !studentInfo) return;
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: false,
+                quality: 1,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setScanned(true);
+                setMessage('Scanning image...');
+                const uri = result.assets[0].uri;
+
+                const scannedResults = await BarCodeScanner.scanFromURLAsync(uri, [BarCodeScanner.Constants.BarCodeType.qr]);
+
+                if (scannedResults.length > 0) {
+                    await processQRData(scannedResults[0].data);
+                } else {
+                    Alert.alert('No QR Code Found', 'Could not detect any QR code in the selected image.');
+                    setScanned(false);
+                    setMessage('Ready to scan');
+                }
+            }
+        } catch (error) {
+            Alert.alert('Image Scan Error', 'Failed to process the image.');
+            setScanned(false);
+            setMessage('Ready to scan');
         }
     };
 
@@ -130,7 +168,11 @@ export default function StudentScannerScreen({ navigation }: any) {
 
             <View style={styles.footer}>
                 <Text style={styles.footerText}>{studentInfo?.email}</Text>
-                <Text style={[styles.statusText, scanned && { color: '#f59e0b' }]}>{message}</Text>
+                <Text style={[styles.statusText, scanned && { color: '#f59e0b' }, { marginBottom: 20 }]}>{message}</Text>
+
+                <TouchableOpacity style={styles.uploadBtn} onPress={uploadFromGallery} disabled={scanned}>
+                    <Text style={styles.uploadBtnText}>🖼️ Pick QR from Gallery</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );
@@ -150,5 +192,7 @@ const styles = StyleSheet.create({
     focusedContainer: { flex: 6, borderWidth: 2, borderColor: '#22c55e', backgroundColor: 'transparent' },
     footer: { padding: 40, backgroundColor: '#0f172a', alignItems: 'center' },
     footerText: { color: '#94a3b8', fontSize: 13, marginBottom: 8, fontWeight: '500' },
-    statusText: { color: '#22c55e', fontSize: 16, fontWeight: 'bold', textAlign: 'center' }
+    statusText: { color: '#22c55e', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+    uploadBtn: { width: '100%', backgroundColor: '#1e293b', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 14, borderWidth: 1, borderColor: '#334155', alignItems: 'center' },
+    uploadBtnText: { color: '#f1f5f9', fontSize: 15, fontWeight: '600' }
 });

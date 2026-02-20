@@ -12,6 +12,8 @@ import QRCode from 'react-native-qrcode-svg';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { stopSession } from '../api';
 import { SESSION_DURATION_MS } from '../config';
+import ViewShot from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const QR_SIZE = Math.min(SCREEN_WIDTH - 64, 320);
@@ -28,6 +30,7 @@ export default function SessionScreen({ navigation, route }: SessionScreenProps)
     const [isActive, setIsActive] = useState(true);
     const [closing, setClosing] = useState(false);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const viewShotRef = useRef<any>(null);
 
     // Keep screen awake
     useEffect(() => {
@@ -141,6 +144,23 @@ export default function SessionScreen({ navigation, route }: SessionScreenProps)
         }
     };
 
+    const handleShareQR = async () => {
+        try {
+            if (!viewShotRef.current) return;
+            // Delay slightly to ensure render
+            const uri = await viewShotRef.current.capture();
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri, {
+                    dialogTitle: 'Share Session QR Code',
+                });
+            } else {
+                Alert.alert('Sharing Unavailable', 'Your device does not support sharing right now.');
+            }
+        } catch (error: any) {
+            Alert.alert('Error sharing', error.message);
+        }
+    };
+
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
             {/* Header */}
@@ -172,14 +192,16 @@ export default function SessionScreen({ navigation, route }: SessionScreenProps)
             {/* QR Code */}
             <View style={styles.qrContainer}>
                 {isActive ? (
-                    <View style={styles.qrWrapper}>
-                        <QRCode
-                            value={formUrl}
-                            size={QR_SIZE}
-                            backgroundColor="#ffffff"
-                            color="#0f172a"
-                        />
-                    </View>
+                    <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1.0 }}>
+                        <View style={styles.qrWrapper}>
+                            <QRCode
+                                value={formUrl}
+                                size={QR_SIZE}
+                                backgroundColor="#ffffff"
+                                color="#0f172a"
+                            />
+                        </View>
+                    </ViewShot>
                 ) : (
                     <View style={styles.qrClosed}>
                         <Text style={styles.qrClosedIcon}>🚫</Text>
@@ -191,16 +213,26 @@ export default function SessionScreen({ navigation, route }: SessionScreenProps)
             {/* Actions */}
             <View style={styles.actions}>
                 {isActive && (
-                    <TouchableOpacity
-                        style={styles.terminateBtn}
-                        onPress={() => handleTerminate(false)}
-                        disabled={closing}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.terminateBtnText}>
-                            {closing ? '⏳ Closing...' : '⏹  Terminate Session'}
-                        </Text>
-                    </TouchableOpacity>
+                    <>
+                        <TouchableOpacity
+                            style={styles.shareBtn}
+                            onPress={handleShareQR}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.shareBtnText}>🔗  Share QR Code</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.terminateBtn}
+                            onPress={() => handleTerminate(false)}
+                            disabled={closing}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.terminateBtnText}>
+                                {closing ? '⏳ Closing...' : '⏹  Terminate Session'}
+                            </Text>
+                        </TouchableOpacity>
+                    </>
                 )}
 
                 <TouchableOpacity style={styles.actionBtn} onPress={viewResponses} activeOpacity={0.8}>
@@ -232,9 +264,11 @@ const styles = StyleSheet.create({
     qrClosedIcon: { fontSize: 48, marginBottom: 12 },
     qrClosedText: { fontSize: 18, color: '#ef4444', fontWeight: '700' },
     actions: { width: '100%', gap: 12 },
+    shareBtn: { width: '100%', backgroundColor: '#6366f1', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginBottom: 4 },
+    shareBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
     terminateBtn: { width: '100%', backgroundColor: '#dc2626', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
     terminateBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-    actionBtn: { width: '100%', backgroundColor: '#6366f1', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
+    actionBtn: { width: '100%', backgroundColor: '#1e293b', paddingVertical: 16, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: '#334155' },
     actionBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
     actionBtnOutline: { width: '100%', backgroundColor: 'transparent', paddingVertical: 16, borderRadius: 14, alignItems: 'center', borderWidth: 1.5, borderColor: '#334155' },
     actionBtnOutlineText: { color: '#94a3b8', fontSize: 16, fontWeight: '600' },
