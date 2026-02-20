@@ -12,6 +12,10 @@ import HistoryScreen from './src/screens/HistoryScreen';
 import SessionScreen from './src/screens/SessionScreen';
 import ResponsesScreen from './src/screens/ResponsesScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import RoleScreen from './src/screens/RoleScreen';
+import StudentLoginScreen from './src/screens/StudentLoginScreen';
+import StudentScannerScreen from './src/screens/StudentScannerScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Stack = createNativeStackNavigator();
 
@@ -29,12 +33,13 @@ const DarkTheme = {
 
 export default function App() {
     const [isLoading, setIsLoading] = useState(true);
-    const [initialRoute, setInitialRoute] = useState('Login');
+    const [initialRoute, setInitialRoute] = useState('RoleSelection');
     const [initialParams, setInitialParams] = useState<any>(undefined);
 
     useEffect(() => {
         const checkUser = async () => {
             try {
+                // Check Teacher First
                 const user = await getUser();
                 if (user) {
                     setInitialRoute('Home');
@@ -44,6 +49,14 @@ export default function App() {
                         userCollege: user.college,
                         userDepartment: user.department,
                     });
+                    return;
+                }
+
+                // Check Student Next
+                const studentUser = await AsyncStorage.getItem('student_user');
+                if (studentUser) {
+                    setInitialRoute('StudentScanner');
+                    return;
                 }
             } catch (e) {
                 console.error(e);
@@ -69,6 +82,10 @@ export default function App() {
                     contentStyle: { backgroundColor: '#0f172a' },
                 }}
             >
+                <Stack.Screen name="RoleSelection" component={RoleScreen} />
+                <Stack.Screen name="StudentLogin" component={StudentLoginScreen} />
+                <Stack.Screen name="StudentScanner" component={StudentScannerScreen} />
+
                 <Stack.Screen name="Login" component={LoginScreen} />
                 <Stack.Screen name="Register" component={RegisterScreen} />
                 <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
