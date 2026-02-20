@@ -4,6 +4,7 @@ import { Camera, CameraView } from 'expo-camera';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DEFAULT_SERVER_URL } from '../config';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function StudentScannerScreen({ navigation }: any) {
     const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -96,6 +97,77 @@ export default function StudentScannerScreen({ navigation }: any) {
         }
     };
 
+    const processImageWithServer = async (uri: string) => {
+        try {
+            setMessage('Uploading image for scanning...');
+            const formData = new FormData();
+            formData.append('qrimage', {
+                uri,
+                name: 'scan.jpg',
+                type: 'image/jpeg'
+            } as any);
+
+            const res = await fetch(`${DEFAULT_SERVER_URL}/api/student/decode-qr`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'multipart/form-data' },
+                body: formData
+            });
+            const data = await res.json();
+
+            if (data.success && data.data) {
+                await processQRData(data.data);
+            } else {
+                Alert.alert('No QR Found', data.error || 'Failed to detect a QR code in the image.');
+                setScanned(false);
+                setMessage('Ready to scan');
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to reach server for decoding.');
+            setScanned(false);
+            setMessage('Ready to scan');
+        }
+    };
+
+    const uploadFromGallery = async () => {
+        if (scanned || !studentInfo) return;
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: false,
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setScanned(true);
+                await processImageWithServer(result.assets[0].uri);
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to process gallery image.');
+            setScanned(false);
+            setMessage('Ready to scan');
+        }
+    };
+
+    const takePictureFromCamera = async () => {
+        if (scanned || !studentInfo) return;
+        try {
+            const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ['images'],
+                allowsEditing: false,
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setScanned(true);
+                await processImageWithServer(result.assets[0].uri);
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to capture image.');
+            setScanned(false);
+            setMessage('Ready to scan');
+        }
+    };
+
     if (hasPermission === null) {
         return <View style={styles.container}><Text style={styles.text}>Requesting permissions...</Text></View>;
     }
@@ -135,7 +207,16 @@ export default function StudentScannerScreen({ navigation }: any) {
 
             <View style={styles.footer}>
                 <Text style={styles.footerText}>{studentInfo?.email}</Text>
-                <Text style={[styles.statusText, scanned && { color: '#f59e0b' }]}>{message}</Text>
+                <Text style={[styles.statusText, scanned && { color: '#f59e0b' }, { marginBottom: 16 }]}>{message}</Text>
+
+                <View style={styles.actionRow}>
+                    <TouchableOpacity style={styles.uploadBtn} onPress={uploadFromGallery} disabled={scanned}>
+                        <Text style={styles.uploadBtnText}>🖼️ Pick Gallery QR</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.uploadBtn} onPress={takePictureFromCamera} disabled={scanned}>
+                        <Text style={styles.uploadBtnText}>📸 Take Picture</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );
@@ -153,7 +234,10 @@ const styles = StyleSheet.create({
     unfocusedContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' },
     middleContainer: { flexDirection: 'row', flex: 1.5 },
     focusedContainer: { flex: 6, borderWidth: 2, borderColor: '#22c55e', backgroundColor: 'transparent' },
-    footer: { padding: 40, backgroundColor: '#0f172a', alignItems: 'center' },
+    footer: { padding: 30, backgroundColor: '#0f172a', alignItems: 'center' },
     footerText: { color: '#94a3b8', fontSize: 13, marginBottom: 8, fontWeight: '500' },
-    statusText: { color: '#22c55e', fontSize: 16, fontWeight: 'bold', textAlign: 'center' }
+    statusText: { color: '#22c55e', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+    actionRow: { flexDirection: 'row', gap: 12, width: '100%', justifyContent: 'center' },
+    uploadBtn: { flex: 1, backgroundColor: '#1e293b', paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: '#334155', alignItems: 'center' },
+    uploadBtnText: { color: '#f1f5f9', fontSize: 13, fontWeight: '700' }
 });

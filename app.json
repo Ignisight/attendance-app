@@ -23,7 +23,7 @@
       }
     },
     "plugins": [
-      "expo-barcode-scanner"
+      "expo-camera"
     ]
   }
 }
