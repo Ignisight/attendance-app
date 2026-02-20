@@ -15,23 +15,35 @@ export function getServerUrl() {
 // AUTH
 // ==========================================
 
-export async function register(name: string, email: string, password: string, college?: string, department?: string) {
-    const res = await fetch(`${SERVER_URL}/api/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, college, department }),
-    });
-    return await res.json();
-}
+// Register
+export const register = async (name: string, email: string, password: string, college: string, department: string) => {
+    try {
+        const response = await fetch(`${SERVER_URL}/api/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, password, college, department }),
+        });
+        return await response.json();
+    } catch (error) {
+        console.error("Register Error:", error);
+        return { success: false, error: "Network error" };
+    }
+};
 
-export async function login(email: string, password: string) {
-    const res = await fetch(`${SERVER_URL}/api/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-    });
-    return await res.json();
-}
+// Login
+export const login = async (email: string, password: string) => {
+    try {
+        const response = await fetch(`${SERVER_URL}/api/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        });
+        return await response.json();
+    } catch (error) {
+        console.error("Login Error:", error);
+        return { success: false, error: "Network error" };
+    }
+};
 
 export async function forgotPassword(email: string) {
     const res = await fetch(`${SERVER_URL}/api/forgot-password`, {
@@ -51,21 +63,38 @@ export async function resetPassword(email: string, otp: string, newPassword: str
     return await res.json();
 }
 
+// Change Password
+export const changePassword = async (email: string, currentPassword: string, newPassword: string) => {
+    try {
+        const response = await fetch(`${SERVER_URL}/api/change-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, currentPassword, newPassword }),
+        });
+        return await response.json();
+    } catch (error) {
+        return { success: false, error: "Network error" };
+    }
+};
+
 // ==========================================
 // ATTENDANCE
 // ==========================================
 
-export async function startSession(sessionName: string) {
+export async function startSession(sessionName: string, lat?: number, lon?: number) {
     const res = await fetch(`${SERVER_URL}/api/start-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionName }),
+        body: JSON.stringify({ sessionName, lat, lon }),
     });
     return await res.json();
 }
 
-export async function stopSession() {
-    const res = await fetch(`${SERVER_URL}/api/stop-session`, {
+export async function stopSession(sessionId?: number) {
+    let url = `${SERVER_URL}/api/stop-session`;
+    if (sessionId) url = `${SERVER_URL}/api/sessions/${sessionId}/stop`;
+
+    const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
     });

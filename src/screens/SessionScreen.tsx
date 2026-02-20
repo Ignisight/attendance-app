@@ -35,19 +35,29 @@ export default function SessionScreen({ navigation, route }: SessionScreenProps)
         return () => { deactivateKeepAwake('session'); };
     }, []);
 
-    // Countdown timer
+    // Countdown timer (Absolute Time)
     useEffect(() => {
         if (!isActive) return;
 
-        intervalRef.current = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev <= 1000) {
-                    handleTerminate(true);
-                    return 0;
-                }
-                return prev - 1000;
-            });
-        }, 1000);
+        const startTime = route.params.sessionId || Date.now();
+        const endTime = startTime + SESSION_DURATION_MS;
+
+        const tick = () => {
+            const now = Date.now();
+            const remaining = endTime - now;
+
+            if (remaining <= 0) {
+                setTimeLeft(0);
+                handleTerminate(true);
+                return;
+            }
+            setTimeLeft(remaining);
+        };
+
+        // Initial tick
+        tick();
+
+        intervalRef.current = setInterval(tick, 1000);
 
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
@@ -62,7 +72,7 @@ export default function SessionScreen({ navigation, route }: SessionScreenProps)
         if (intervalRef.current) clearInterval(intervalRef.current);
 
         try {
-            await stopSession();
+            await stopSession(route.params.sessionId);
             Alert.alert(
                 auto ? 'Time Up!' : 'Session Terminated',
                 auto
@@ -97,20 +107,37 @@ export default function SessionScreen({ navigation, route }: SessionScreenProps)
     const goBack = () => {
         if (isActive) {
             Alert.alert(
-                'Session Active',
-                'Terminate the session and go back?',
+                'Leave Running or Terminate?',
+                'You can leave this session running in the background and start another one.',
                 [
                     { text: 'Cancel', style: 'cancel' },
                     {
-                        text: 'Terminate & Go Back', style: 'destructive', onPress: async () => {
+                        text: 'Leave Running', style: 'default', onPress: () => {
+                            if (navigation.canGoBack()) {
+                                navigation.goBack();
+                            } else {
+                                navigation.navigate('Home');
+                            }
+                        }
+                    },
+                    {
+                        text: 'Terminate', style: 'destructive', onPress: async () => {
                             await handleTerminate();
-                            navigation.goBack();
+                            if (navigation.canGoBack()) {
+                                navigation.goBack();
+                            } else {
+                                navigation.navigate('Home');
+                            }
                         }
                     },
                 ]
             );
         } else {
-            navigation.goBack();
+            if (navigation.canGoBack()) {
+                navigation.goBack();
+            } else {
+                navigation.navigate('Home');
+            }
         }
     };
 

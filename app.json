@@ -1,21 +1,26 @@
 {
-    "expo": {
-        "name": "Attendance System",
-        "slug": "attendance-system",
-        "version": "1.0.0",
-        "orientation": "portrait",
-        "icon": "./assets/icon.png",
-        "userInterfaceStyle": "dark",
-        "newArchEnabled": false,
-        "splash": {
-            "backgroundColor": "#0f172a"
-        },
-        "android": {
-            "adaptiveIcon": {
-                "foregroundImage": "./assets/adaptive-icon.png",
-                "backgroundColor": "#0f172a"
-            },
-            "package": "com.attendance.system"
-        }
+  "expo": {
+    "name": "Attendance System",
+    "slug": "attendance-system",
+    "version": "1.5.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": false,
+    "splash": {
+      "backgroundColor": "#0f172a"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.attendance.system"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8fbb94c8-1140-415e-95c3-64e1da1b5cc3"
+      }
     }
+  }
 }

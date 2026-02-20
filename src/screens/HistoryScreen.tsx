@@ -70,9 +70,23 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
         });
     };
 
-    const formatDuration = (start: string, end: string | null) => {
-        const endMs = end ? new Date(end).getTime() : now;
-        const ms = endMs - new Date(start).getTime();
+    const formatDuration = (start: string, end: string | null, active: boolean) => {
+        let endMs;
+        if (end) {
+            endMs = new Date(end).getTime();
+        } else if (active) {
+            endMs = now;
+        } else {
+            endMs = new Date(start).getTime() + 10 * 60 * 1000; // 10m fallback for legacy
+        }
+
+        let ms = endMs - new Date(start).getTime();
+
+        // Cap the live active timer to EXACTLY 10 minutes if the user hasn't pulled to refresh yet
+        if (active && ms > 10 * 60 * 1000) {
+            ms = 10 * 60 * 1000;
+        }
+
         const totalSec = Math.floor(ms / 1000);
         const hrs = Math.floor(totalSec / 3600);
         const mins = Math.floor((totalSec % 3600) / 60);
@@ -221,27 +235,37 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
 
     const renderItem = ({ item }: { item: SessionItem }) => {
         const isSelected = selected.has(item.id);
+        const elapsedLocalMs = now - new Date(item.createdAt).getTime();
+        const isEffectivelyActive = item.active && elapsedLocalMs <= 10 * 60 * 1000;
+
+        let displayStoppedAt = item.stoppedAt;
+        if (!isEffectivelyActive && item.active && !item.stoppedAt) {
+            // It just crossed 10 mins locally but hasn't synced with server yet. Inject visually.
+            displayStoppedAt = new Date(new Date(item.createdAt).getTime() + 10 * 60 * 1000).toISOString();
+        }
+
         return (
             <TouchableOpacity
                 style={[
                     styles.card,
-                    item.active && styles.cardActive,
+                    isEffectivelyActive && styles.cardActive,
                     isSelected && styles.cardSelected,
                 ]}
                 onPress={() => selectMode ? toggleSelect(item.id) : viewResponses(item.name)}
                 onLongPress={() => handleLongPress(item.id)}
                 activeOpacity={0.7}
             >
+                {/* Header row */}
                 <View style={styles.cardTop}>
                     {selectMode ? (
                         <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
                             {isSelected && <Text style={styles.checkboxIcon}>✓</Text>}
                         </View>
                     ) : (
-                        <View style={[styles.statusDot, item.active && styles.statusDotActive]} />
+                        <View style={[styles.statusDot, isEffectivelyActive && styles.statusDotActive]} />
                     )}
                     <Text style={styles.cardName} numberOfLines={2}>{item.name}</Text>
-                    {item.active && !selectMode && (
+                    {isEffectivelyActive && !selectMode && (
                         <TouchableOpacity
                             style={styles.stopBtn}
                             onPress={() => stopSession(item)}
@@ -256,12 +280,12 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
                     <Text style={styles.timeLabel}>🟢 Start:</Text>
                     <Text style={styles.timeValue}>{formatDateTime(item.createdAt)}</Text>
                 </View>
-                {item.stoppedAt ? (
+                {displayStoppedAt ? (
                     <View style={styles.timeRow}>
                         <Text style={styles.timeLabel}>🔴 End:</Text>
-                        <Text style={styles.timeValue}>{formatDateTime(item.stoppedAt)}</Text>
+                        <Text style={styles.timeValue}>{formatDateTime(displayStoppedAt)}</Text>
                     </View>
-                ) : item.active ? (
+                ) : isEffectivelyActive ? (
                     <View style={styles.timeRow}>
                         <Text style={[styles.timeLabel, { color: '#22c55e' }]}>⏳ Running</Text>
                     </View>
@@ -271,9 +295,9 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
                     <View style={styles.chip}>
                         <Text style={styles.chipText}>👥 {item.responseCount}</Text>
                     </View>
-                    <View style={[styles.chip, item.active && { backgroundColor: '#052e16', borderWidth: 1, borderColor: '#22c55e40' }]}>
-                        <Text style={[styles.chipText, item.active && { color: '#4ade80' }]}>
-                            ⏱ {formatDuration(item.createdAt, item.stoppedAt)}
+                    <View style={[styles.chip, isEffectivelyActive && { backgroundColor: '#052e16', borderWidth: 1, borderColor: '#22c55e40' }]}>
+                        <Text style={[styles.chipText, isEffectivelyActive && { color: '#4ade80' }]}>
+                            ⏱ {formatDuration(item.createdAt, displayStoppedAt, isEffectivelyActive)}
                         </Text>
                     </View>
                 </View>

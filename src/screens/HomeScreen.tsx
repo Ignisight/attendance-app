@@ -12,6 +12,7 @@ import {
     Dimensions,
 } from 'react-native';
 import { startSession, getServerUrl, clearUser } from '../api';
+import * as Location from 'expo-location';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.82;
@@ -68,14 +69,61 @@ export default function HomeScreen({ navigation, route }: HomeScreenProps) {
 
         setLoading(true);
         try {
-            const result = await startSession(trimmed);
-            if (result.error) { Alert.alert('Error', result.error); return; }
-            if (result.success) {
-                navigation.navigate('Session', { sessionName: trimmed, formUrl: result.formUrl });
-                setSessionName('');
+            // 1. Get Location
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission Denied', 'Location permission is required to start a specific-location session.');
+                setLoading(false);
+                return;
             }
-        } catch (err: any) {
-            Alert.alert('Connection Error', 'Could not reach the server. Check Settings → Server URL.');
+
+            let latitude, longitude;
+            let locationFetched = false;
+
+            // Try up to 3 times to get location (gives GPS time to wake up)
+            for (let i = 0; i < 3; i++) {
+                try {
+                    let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                    latitude = location.coords.latitude;
+                    longitude = location.coords.longitude;
+                    locationFetched = true;
+                    break; // Success, exit loop
+                } catch (err) {
+                    // Wait 2 seconds before retrying
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+
+            // If still failed, try last known
+            if (!locationFetched) {
+                try {
+                    let location = await Location.getLastKnownPositionAsync({});
+                    if (!location) throw new Error('No location');
+                    latitude = location.coords.latitude;
+                    longitude = location.coords.longitude;
+                    locationFetched = true;
+                } catch (locErr) {
+                    Alert.alert('Location Error', 'Still cannot fetch location. Please ensure GPS is ON and you have a clear view of the sky, then try again.');
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            // 2. Start Session with Coords
+            try {
+                const result = await startSession(trimmed, latitude, longitude);
+                if (result.error) { Alert.alert('Error', result.error); return; }
+                if (result.success) {
+                    navigation.navigate('Session', {
+                        sessionName: trimmed,
+                        formUrl: result.formUrl,
+                        sessionId: result.sessionId, // Timer absolute time
+                    });
+                    setSessionName('');
+                }
+            } catch (serverErr) {
+                Alert.alert('Connection Error', 'Could not reach the server. Check Settings → Server URL.');
+            }
         } finally {
             setLoading(false);
         }
